@@ -1,0 +1,132 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: hello-service
+  labels:
+    app: hello-service
+spec:
+  host: hello-service
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 0
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      baseEjectionTime: 1m
+      consecutive5xxErrors: 50
+      interval: 2s
+      maxEjectionPercent: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: hello-service
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - istio-gateway
+  http:
+    - match:
+        - uri:
+            prefix: "/hello-service/"
+      rewrite:
+        uri: "/"
+      route:
+        - destination:
+            host: hello-service
+            subset: v1
+            port:
+              number: 8080
+      corsPolicy:
+        allowOrigins:
+          - exact: "*"
+        allowMethods:
+          - POST
+          - GET
+          - PUT
+          - DELETE
+          - HEAD
+          - PATCH
+          - OPTIONS
+          - TRACE
+          - CONNECT
+        allowCredentials: false
+        allowHeaders:
+          - "*"
+        maxAge: "24h"
+---
+# apiVersion: "security.istio.io/v1beta1"
+# kind: "RequestAuthentication"
+# metadata:
+#   name: "hello-service-jwt-auth"
+#   namespace: default
+# spec:
+#   selector:
+#     matchLabels:
+#       app: hello-service
+#   jwtRules:
+#    - issuer: "gaian.com"
+#      jwksUri: "http://dev-ingress-gateway.gaiansolutions.com/iam-service/.well-known/jwks.json"
+#      forwardOriginalToken: true
+# ---     
+# apiVersion: security.istio.io/v1beta1
+# kind: AuthorizationPolicy
+# metadata:
+#   namespace: default
+#   name: hello-service-other-rules
+# spec:
+#   selector:
+#     matchLabels:
+#       app: hello-service
+#   action: ALLOW
+#   rules:
+#     - to:
+#         - operation:
+#             methods: [ "GET","POST","PUT","DELETE","PATCH" ]
+#       when:
+#         - key: request.auth.claims[authorities]
+#           values: [ "ROLE_MARKETPLACE_USER","ROLE_OMNI_USER" ]
+#       from:
+#         - source:
+#             requestPrincipals: [ "gaian.com/gaian.com" ]
+# ---
+# apiVersion: security.istio.io/v1beta1
+# kind: AuthorizationPolicy
+# metadata:
+#   namespace: default
+#   name: hello-service-swagger-rules
+# spec:
+#   selector:
+#     matchLabels:
+#       app: hello-service
+#   action: ALLOW
+#   rules:
+#     - from:
+#         - source:
+#             requestPrincipals: [ "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account" ]
+#     - to:
+#         - operation:
+#             methods: [ "GET","HEAD"]
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  namespace: default
+  name: hello-service-rules
+spec:
+  selector:
+    matchLabels:
+      app: hello-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            requestPrincipals: [ "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account" ]
+    - to:
+        - operation:
+            methods: ["GET","POST","PUT","DELETE","HEAD"]

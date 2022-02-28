@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-service
+  template:
+    metadata:
+      name: hello-service
+      labels:
+        app: hello-service
+        version: v1
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            -  podAffinityTerm:
+                 labelSelector:
+                   matchExpressions:
+                     - key: app
+                       operator: In
+                       values:
+                         - hello-service
+                 topologyKey: kubernetes.io/hostname
+               weight: 100
+      containers:
+      - name: hello-service
+        image: gurpreetgandhi/hello:v1006
+        imagePullPolicy: Always
+#        volumeMounts:
+#        - name: application-config
+#          mountPath: /deployments/config
+#          readOnly: true
+        ports:
+        - containerPort: 8080
+        env:
+          - name: VERSION
+            value: "v1"
+#      volumes:
+#        - name: application-config
+#          configMap:
+#            name: spring-app-config
+#            items:
+#            - key: application.properties
+#              path: application.properties
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-service
+  labels:
+    app: hello-service
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      name: http
+  selector:
+    app: hello-service
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hello-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hello-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
